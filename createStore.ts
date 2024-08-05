@@ -6,49 +6,48 @@ type SetterFn<
 	T extends Record<PropertyKey, unknown> = Record<PropertyKey, unknown>,
 > = (partialState: Partial<T> | SetterSelectorFn<T>) => void;
 
-const createStore = <
+class Store<
 	T extends Record<PropertyKey, unknown> = Record<PropertyKey, unknown>,
->(
-	initState: (setState: SetterFn<T>) => T,
-) => {
-	let state: T;
+> {
+	#state: T;
+	#listeners: Set<() => void>;
 
-	const listeners: Set<() => void> = new Set();
+	get state() {
+		return this.#state;
+	}
 
-	const notifyListeners = () => {
-		for (const listener of listeners) {
+	constructor(initState: (setState: SetterFn<T>) => T) {
+		this.#state = initState(this.setState);
+		this.#listeners = new Set();
+	}
+
+	#notifyListeners = () => {
+		for (const listener of this.#listeners) {
 			listener();
 		}
 	};
 
-	const subscribe = (listener: () => void) => {
-		listeners.add(listener);
+	public subscribe = (listener: () => void): (() => void) => {
+		this.#listeners.add(listener);
 
 		return () => {
-			listeners.delete(listener);
+			this.#listeners.delete(listener);
 		};
 	};
 
-	const setState = (partialState: Partial<T> | SetterSelectorFn<T>) => {
-		const newValue =
-			typeof partialState === "function" ? partialState(state) : partialState;
+	public setState = (partialState: Partial<T> | SetterSelectorFn<T>) => {
+		const stateDataToAssign =
+			typeof partialState === "function"
+				? partialState(this.#state)
+				: partialState;
 
-		state = state
-			? {
-					...state,
-					...newValue,
-				}
-			: ({ ...structuredClone(newValue) } as T);
+		this.#state = {
+			...(this.#state ?? {}),
+			...stateDataToAssign,
+		};
 
-		notifyListeners();
+		this.#notifyListeners();
 	};
+}
 
-	state = initState(setState);
-
-	return {
-		setState,
-		subscribe,
-	};
-};
-
-export { createStore };
+export { Store };
